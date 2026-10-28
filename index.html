@@ -44,32 +44,32 @@
       color: #e50914;
     }
     .icon-badge {
-      width: 64px;
-      height: 64px;
+      width: 68px;
+      height: 68px;
       border-radius: 50%;
       margin: 0 auto 20px auto;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    .icon-info {
-      background: rgba(229, 9, 20, 0.12);
-      border: 2px solid #e50914;
-      color: #e50914;
-    }
     .icon-success {
       background: rgba(16, 185, 129, 0.15);
       border: 2px solid #10b981;
       color: #10b981;
+      animation: pop 0.4s ease-out;
     }
     .icon-error {
       background: rgba(239, 68, 68, 0.15);
       border: 2px solid #ef4444;
       color: #ef4444;
     }
+    @keyframes pop {
+      0% { transform: scale(0.7); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
     .icon-svg {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       fill: none;
       stroke: currentColor;
       stroke-width: 2.5;
@@ -95,7 +95,7 @@
       font-size: 14px;
       color: #f3f4f6;
       font-weight: 600;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       word-break: break-all;
     }
     .btn {
@@ -113,21 +113,15 @@
       box-shadow: 0 4px 20px rgba(229, 9, 20, 0.4);
       transition: transform 0.15s ease, opacity 0.15s ease;
     }
-    .btn:hover {
-      opacity: 0.95;
-    }
-    .btn:active {
-      transform: scale(0.98);
-    }
     .btn-secondary {
       background: rgba(255, 255, 255, 0.08);
       box-shadow: none;
       color: #d1d5db;
-      margin-top: 12px;
+      margin-top: 14px;
     }
     .spinner {
-      width: 44px;
-      height: 44px;
+      width: 48px;
+      height: 48px;
       border: 4px solid rgba(229, 9, 20, 0.2);
       border-top-color: #e50914;
       border-radius: 50%;
@@ -148,25 +142,11 @@
   <div class="card">
     <div class="brand">Direct<span>Pix</span></div>
 
-    <!-- Schermata di Conferma (Click esplicito utente: previene blocchi di sicurezza) -->
-    <div id="step-confirm">
-      <div class="icon-badge icon-info">
-        <svg class="icon-svg" viewBox="0 0 24 24">
-          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
-          <line x1="12" y1="18" x2="12.01" y2="18"></line>
-        </svg>
-      </div>
-      <h1>Associazione Dispositivo</h1>
-      <p>È stata richiesta l'autorizzazione di accesso per:</p>
-      <div id="user-email-display" class="user-pill">Verifica in corso...</div>
-      <button id="authorize-btn" class="btn">Autorizza Dispositivo</button>
-    </div>
-
-    <!-- Schermata di caricamento durante la richiesta -->
-    <div id="step-loading" style="display: none;">
+    <!-- Schermata di caricamento / autorizzazione automatica immediata -->
+    <div id="step-loading">
       <div class="spinner"></div>
       <h1>Autorizzazione in corso...</h1>
-      <p>Connessione al tuo dispositivo...</p>
+      <p id="loading-desc">Connessione sicura al tuo dispositivo DirectPix...</p>
     </div>
 
     <!-- Schermata di successo -->
@@ -177,7 +157,8 @@
         </svg>
       </div>
       <h1>Dispositivo Autorizzato!</h1>
-      <p>Il tuo dispositivo DirectPix è ora connesso e sincronizzato. Puoi chiudere questa scheda.</p>
+      <div id="user-email-display" class="user-pill"></div>
+      <p>Il tuo dispositivo DirectPix è stato collegato con successo.<br><br><strong>Puoi chiudere questa scheda.</strong></p>
       <a id="open-app-btn" class="btn btn-secondary" style="display: none;" href="#">Apri DirectPix</a>
     </div>
 
@@ -201,17 +182,15 @@
       const FIREBASE_API_KEY = "AIzaSyDxau1pZiHicoSLNRam63HIYLhATaHe2qY";
       const RTDB_BASE = "https://directpix-5a2e1-default-rtdb.europe-west1.firebasedatabase.app";
 
-      const stepConfirm = document.getElementById("step-confirm");
       const stepLoading = document.getElementById("step-loading");
+      const loadingDesc = document.getElementById("loading-desc");
       const stepSuccess = document.getElementById("step-success");
       const stepError = document.getElementById("step-error");
       const userEmailDisplay = document.getElementById("user-email-display");
-      const authorizeBtn = document.getElementById("authorize-btn");
       const errorDescription = document.getElementById("error-description");
       const openAppBtn = document.getElementById("open-app-btn");
 
       function showStep(step) {
-        stepConfirm.style.display = step === "confirm" ? "block" : "none";
         stepLoading.style.display = step === "loading" ? "block" : "none";
         stepSuccess.style.display = step === "success" ? "block" : "none";
         stepError.style.display = step === "error" ? "block" : "none";
@@ -247,21 +226,17 @@
         email = window.localStorage.getItem("dp_pending_email");
       }
 
-      if (email) {
-        userEmailDisplay.innerText = email;
-      } else {
-        userEmailDisplay.innerText = "Dispositivo in attesa";
-      }
-
       if (!oobCode) {
         showStep("error");
         errorDescription.innerText = "Nessun codice di autorizzazione valido trovato nell'indirizzo.";
         return;
       }
 
-      // Il bottone esplicito evita il flag automatico anti-bot / anti-redirect di Google Safe Browsing
-      authorizeBtn.onclick = function() {
-        showStep("loading");
+      // Esecuzione 100% automatica: zero clic richiesti!
+      function autoAuthorize() {
+        if (email) {
+          loadingDesc.innerText = "Autorizzazione in corso per " + email + "...";
+        }
 
         var payload = {
           email: email || "",
@@ -288,7 +263,7 @@
           }
 
           var auth = result.data;
-          var resolvedEmail = email || auth.email || "utente";
+          var resolvedEmail = email || auth.email || "Account DirectPix";
 
           if (sid) {
             var rtdbData = {
@@ -306,13 +281,15 @@
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(rtdbData)
             }).then(function() {
-              return auth;
+              return resolvedEmail;
             });
           }
-          return auth;
+          return resolvedEmail;
         })
-        .then(function() {
+        .then(function(resolvedEmail) {
+          userEmailDisplay.innerText = resolvedEmail;
           showStep("success");
+
           var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
           if (isMobile) {
             openAppBtn.href = "directpix://login?oobCode=" + encodeURIComponent(oobCode) + "&email=" + encodeURIComponent(email || "");
@@ -323,7 +300,10 @@
           showStep("error");
           errorDescription.innerText = err.message || "Errore durante l'autorizzazione. Richiedi un nuovo link.";
         });
-      };
+      }
+
+      // Avvia subito l'autorizzazione
+      autoAuthorize();
     })();
   </script>
 </body>
